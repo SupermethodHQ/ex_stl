@@ -44,6 +44,11 @@ namespace atoms {
   auto inner_loops = fine::Atom("inner_loops");
   auto outer_loops = fine::Atom("outer_loops");
   auto robust = fine::Atom("robust");
+
+  // MSTL specific params
+  auto iterations = fine::Atom("iterations");
+  auto lambda = fine::Atom("lambda");
+  auto seasonal_lengths = fine::Atom("seasonal_lengths");
 }
 
 // Elixir struct representation for StlParams
@@ -61,6 +66,11 @@ struct ExStlParams {
   std::optional<int64_t> outer_loops;
   std::optional<bool> robust;
 
+  // MSTL specific fields
+  std::optional<int64_t> iterations;
+  std::optional<double> lambda;
+  std::optional<std::vector<int64_t>> seasonal_lengths;
+
   static constexpr auto module = &atoms::ElixirStlParams;
 
   static constexpr auto fields() {
@@ -76,7 +86,10 @@ struct ExStlParams {
       std::make_tuple(&ExStlParams::low_pass_jump, &atoms::low_pass_jump),
       std::make_tuple(&ExStlParams::inner_loops, &atoms::inner_loops),
       std::make_tuple(&ExStlParams::outer_loops, &atoms::outer_loops),
-      std::make_tuple(&ExStlParams::robust, &atoms::robust)
+      std::make_tuple(&ExStlParams::robust, &atoms::robust),
+      std::make_tuple(&ExStlParams::iterations, &atoms::iterations),
+      std::make_tuple(&ExStlParams::lambda, &atoms::lambda),
+      std::make_tuple(&ExStlParams::seasonal_lengths, &atoms::seasonal_lengths)
     );
   }
 };
@@ -139,73 +152,6 @@ stl::StlParams convert_params(const ExStlParams& ex_params) {
   return params;
 }
 
-// FINE_RESOURCE class for StlParams
-class StlParamsWrapper {
-public:
-  StlParamsWrapper() : params_(stl::params()) {}
-  stl::StlParams& params() { return params_; }
-private:
-  stl::StlParams params_;
-};
-FINE_RESOURCE(StlParamsWrapper);
-
-// Basic parameter setter - creates a new resource
-fine::ResourcePtr<StlParamsWrapper> stl_params(ErlNifEnv* env) {
-  (void)env;
-  return fine::make_resource<StlParamsWrapper>();
-}
-FINE_NIF(stl_params, 0);
-
-// Macro to define parameter setter functions
-#define DEFINE_PARAM_SETTER(name, type) \
-  fine::ResourcePtr<StlParamsWrapper> set_##name(ErlNifEnv* env, fine::ResourcePtr<StlParamsWrapper> wrapper, type value) { \
-    (void)env; \
-    wrapper->params() = wrapper->params().name(value); \
-    return wrapper; \
-  } \
-  FINE_NIF(set_##name, 0);
-
-// Define all parameter setters using the macro
-DEFINE_PARAM_SETTER(seasonal_length, int64_t)
-DEFINE_PARAM_SETTER(trend_length, int64_t)
-DEFINE_PARAM_SETTER(low_pass_length, int64_t)
-DEFINE_PARAM_SETTER(seasonal_degree, int64_t)
-DEFINE_PARAM_SETTER(trend_degree, int64_t)
-DEFINE_PARAM_SETTER(low_pass_degree, int64_t)
-DEFINE_PARAM_SETTER(seasonal_jump, int64_t)
-DEFINE_PARAM_SETTER(trend_jump, int64_t)
-DEFINE_PARAM_SETTER(low_pass_jump, int64_t)
-DEFINE_PARAM_SETTER(inner_loops, int64_t)
-DEFINE_PARAM_SETTER(outer_loops, int64_t)
-DEFINE_PARAM_SETTER(robust, bool)
-
-#undef DEFINE_PARAM_SETTER
-
-// NIF to perform the actual decomposition using a resource
-std::tuple<std::vector<float>, std::vector<float>, std::vector<float>, std::vector<float>> fit(
-  ErlNifEnv* env,
-  fine::ResourcePtr<StlParamsWrapper> wrapper,
-  fine::Term series_term,
-  int64_t period,
-  bool include_weights
-) {
-  auto series = to_vector_float(env, series_term);
-
-  if (period < 2) {
-    throw std::invalid_argument("period must be greater than 1");
-  }
-
-  auto result = wrapper->params().fit(series, period);
-
-  if (include_weights) {
-    return std::make_tuple(result.seasonal, result.trend, result.remainder, result.weights);
-  } else {
-    // Return empty weights vector if not requested
-    return std::make_tuple(result.seasonal, result.trend, result.remainder, std::vector<float>());
-  }
-}
-FINE_NIF(fit, 0);
-
 // NIF to decompose with struct params
 std::tuple<std::vector<float>, std::vector<float>, std::vector<float>, std::vector<float>> decompose(
   ErlNifEnv* env,
@@ -231,6 +177,69 @@ std::tuple<std::vector<float>, std::vector<float>, std::vector<float>, std::vect
   }
 }
 FINE_NIF(decompose, 0);
+
+// NIF to decompose with multiple seasonal patterns
+std::tuple<std::vector<std::vector<float>>, std::vector<float>, std::vector<float>, std::vector<float>> decompose_multi(
+  ErlNifEnv* env,
+  fine::Term series_term,
+  std::vector<int64_t> periods_int64,
+  ExStlParams ex_params
+) {
+  (void)env;
+  auto series = to_vector_float(env, series_term);
+
+  if (periods_int64.empty()) {
+    throw std::invalid_argument("periods must not be empty");
+  }
+
+  // Convert int64_t periods to size_t
+  std::vector<size_t> periods;
+  periods.reserve(periods_int64.size());
+  for (auto period : periods_int64) {
+    if (period < 2) {
+      throw std::invalid_argument("periods must be at least 2");
+    }
+
+    if (static_cast<size_t>(series.size()) < static_cast<size_t>(period * 2)) {
+      throw std::invalid_argument("series has less than two periods");
+    }
+
+    periods.push_back(static_cast<size_t>(period));
+  }
+
+  // Create MSTL params and apply STL params
+  auto stl_cpp_params = convert_params(ex_params);
+  auto mstl_params = stl::mstl_params().stl_params(stl_cpp_params);
+
+  // Apply MSTL specific parameters
+  // Use iterations if provided
+  if (ex_params.iterations) {
+    mstl_params = mstl_params.iterations(static_cast<size_t>(*ex_params.iterations));
+  }
+
+  // Apply lambda if provided
+  if (ex_params.lambda) {
+    mstl_params = mstl_params.lambda(*ex_params.lambda);
+  }
+
+  // Apply seasonal_lengths if provided
+  if (ex_params.seasonal_lengths) {
+    // Convert int64_t vector to size_t vector
+    std::vector<size_t> seasonal_lengths;
+    seasonal_lengths.reserve(ex_params.seasonal_lengths->size());
+    for (auto length : *ex_params.seasonal_lengths) {
+      seasonal_lengths.push_back(static_cast<size_t>(length));
+    }
+    mstl_params = mstl_params.seasonal_lengths(seasonal_lengths);
+  }
+
+  // Call fit with periods
+  auto result = mstl_params.fit(series, periods);
+
+  // Return components (empty weights vector since MSTL doesn't provide weights)
+  return std::make_tuple(result.seasonal, result.trend, result.remainder, std::vector<float>());
+}
+FINE_NIF(decompose_multi, 0);
 
 // Helper functions for calculating strength
 double seasonal_strength(ErlNifEnv* env, std::vector<float> seasonal, std::vector<float> remainder) {

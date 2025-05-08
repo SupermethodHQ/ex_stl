@@ -50,7 +50,7 @@ series = [5.0, 9.0, 2.0, 9.0, 0.0, 6.0, 3.0, 8.0, 5.0, 8.0,
           7.0, 8.0, 8.0, 0.0, 2.0, 5.0, 0.0, 5.0, 6.0, 7.0,
           3.0, 6.0, 1.0, 4.0, 4.0, 4.0, 3.0, 7.0, 5.0, 8.0]
 
-result = Stl.decompose(series, period: 7)
+result = Stl.decompose(series, 7)
 
 # Access the components
 seasonal = result.seasonal
@@ -71,9 +71,9 @@ IO.puts("Trend strength: #{trend_strength}")
 
 It's important to understand how periods, time series, and seasonality relate to each other. A time series is a sequence of data points measured over time, which can contain various patterns. Seasonality refers to regular, predictable patterns that repeat at fixed intervals. The period parameter specifies exactly how many data points make up one complete seasonal cycle.
 
-For example, with daily data, a weekly seasonality would have a period of 7, monthly patterns would have a period of 30 (approximately), and yearly patterns would have a period of 365. STL requires at least two complete seasonal cycles (periods) in your data to accurately identify and separate the components.
+For example, with daily data, a weekly seasonality would have a period of 7, monthly patterns would have a period of ~30, and yearly patterns would have a period of 365. STL requires at least two complete seasonal cycles (periods) in your data to accurately identify and separate the components.
 
-If you're analyzing weekly patterns [`period: 7`], your time series must contain at least 14 data points. This minimum data requirement ensures the algorithm can distinguish between true seasonal patterns and random fluctuations. When selecting your period, consider the dominant cyclical pattern in your data and ensure your series is long enough to cover multiple complete cycles of that pattern.
+If you're analyzing weekly patterns e.g. `decompose(series, 7)`, your time series must contain at least 14 data points. This minimum data requirement ensures the algorithm can distinguish between true seasonal patterns and random fluctuations. When selecting your period, consider the dominant cyclical pattern in your data and ensure your series is long enough to cover multiple complete cycles of that pattern.
 
 ```elixir
 # Create a time series with dates
@@ -89,7 +89,7 @@ date_series = %{
 }
 
 # The keys are automatically sorted by date before decomposition
-result = Stl.decompose(date_series, period: 3)
+result = Stl.decompose(date_series, 3)
 # %{remainder: [-4.0567626953125, 4.250129699707031, 2.4298858642578125, -1.2078704833984375, -3.82452392578125, -4.5297393798828125, 5.8429718017578125], seasonal: [-23.82843589782715, 18.479854583740234, 6.906088352203369, -4.961262226104736, -12.621232032775879, 2.7985377311706543, 11.959086418151855], trend: [127.88520050048828, 127.27001190185547, 126.66403198242188, 126.16913604736328, 126.44575500488281, 126.731201171875, 127.19793701171875]}
 ```
 
@@ -101,7 +101,7 @@ When you enable robust decomposition with `robust: true`, the algorithm first pe
 
 ```elixir
 # Enable robust decomposition
-robust_result = Stl.decompose(series, period: 7, robust: true)
+robust_result = Stl.decompose(series, 7, robust: true)
 
 # Access the robustness weights
 weights = robust_result.weights
@@ -113,8 +113,7 @@ weights = robust_result.weights
 STL supports a lot of parameters to customise and tune the decomposition:
 
 ```elixir
-result = Stl.decompose(series,
-  period: 7,              # Period of the seasonal component
+result = Stl.decompose(series, 7,
   seasonal_length: 7,     # Length of the seasonal smoother
   trend_length: 15,       # Length of the trend smoother
   low_pass_length: 7,     # Length of the low-pass filter
@@ -129,6 +128,63 @@ result = Stl.decompose(series,
   robust: false           # If robustness iterations are to be used
 )
 ```
+
+### Multiple Seasonal Patterns with MSTL
+
+Many real-world time series exhibit multiple seasonal patterns simultaneously—for example, both daily and weekly cycles in hourly data, or both weekly and yearly patterns in daily data. For these complex cases, STL provides MSTL (Multiple Seasonal-Trend decomposition using Loess) support.
+
+MSTL extends the standard STL algorithm to handle multiple seasonal components by decomposing the time series multiple times, each focusing on a different seasonal period. This allows you to extract distinct seasonal patterns at different frequencies from your data.
+
+```elixir
+# Decompose a time series with both weekly and monthly seasonal patterns
+# You need at least two full cycles of each period
+result = Stl.decompose(series, [7, 30])
+
+# Access individual seasonal components (one per period)
+weekly_seasonal = Enum.at(result.seasonal, 0)  # First element is period 7
+monthly_seasonal = Enum.at(result.seasonal, 1) # Second element is period 30
+
+# The trend and remainder components work the same as in standard STL
+trend = result.trend
+remainder = result.remainder
+```
+
+MSTL supports all the same parameters as standard STL, plus a few additional ones specific to multi-seasonal decomposition:
+
+```elixir
+result = Stl.decompose(series, [7, 30],
+  # MSTL-specific parameters
+  iterations: 2,                  # Number of iterations for MSTL process
+  lambda: 0.5,                    # Lambda for Box-Cox transformation (0 to 1)
+  seasonal_lengths: [11, 31],     # Custom lengths for the seasonal smoothers
+
+  # Standard STL parameters are also supported
+  trend_length: 15,
+  robust: true
+)
+```
+
+The order of periods matters in MSTL decomposition. The seasonal components in the result will have the same order as the periods specified in the input:
+
+```elixir
+# Different order of periods
+result1 = Stl.decompose(series, [7, 30])
+result2 = Stl.decompose(series, [30, 7])
+
+# The seasonal components match the period order
+weekly_from_result1 = Enum.at(result1.seasonal, 0)  # Period 7
+monthly_from_result1 = Enum.at(result1.seasonal, 1) # Period 30
+
+weekly_from_result2 = Enum.at(result2.seasonal, 1)  # Period 7
+monthly_from_result2 = Enum.at(result2.seasonal, 0) # Period 30
+```
+
+MSTL is particularly useful for:
+
+- Complex time series with multiple inherent cycles
+- Data with nested seasonality (e.g., hourly data with daily, weekly, and yearly patterns)
+- Forecasting applications where accounting for multiple seasonal patterns improves accuracy
+- Isolating and analyzing different cyclical components separately
 
 ## Acknowledgements
 

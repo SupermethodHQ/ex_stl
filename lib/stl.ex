@@ -24,8 +24,8 @@ defmodule Stl do
 
   ## Parameters
   * `series` - A list of numbers or a map with keys (e.g., dates) and values.
+  * `:period` - REQUIRED: The period of the seasonal component (must be >= 2).
   * `opts` - Options for the decomposition:
-    * `:period` - REQUIRED: The period of the seasonal component (must be >= 2).
     * `:seasonal_length` - Length of the seasonal smoother.
     * `:trend_length` - Length of the trend smoother.
     * `:low_pass_length` - Length of the low-pass filter.
@@ -39,15 +39,53 @@ defmodule Stl do
     * `:outer_loops` - Number of iterations of robust fitting.
     * `:robust` - If robustness iterations are to be used (boolean).
     * `:include_weights` - Whether to include robustness weights in the result (boolean).
+    * For MSTL (when period is a list):
+    * `:iterations` - Number of iterations for MSTL.
+    * `:lambda` - Lambda for Box-Cox transformation (between 0 and 1).
+    * `:seasonal_lengths` - Lengths of the seasonal smoothers.
+
+    ## Examples
+
+    ### Standard STL decomposition (single period):
+        # Decompose with weekly seasonality
+        result = Stl.decompose(series, 7)
+
+        # Access components
+        seasonal = result.seasonal
+        trend = result.trend
+        remainder = result.remainder
+
+        # With robustness
+        result = Stl.decompose(series, 7, robust: true)
+        weights = result.weights
+
+    ### MSTL decomposition (multiple periods):
+        # Decompose with both weekly and yearly seasonality
+        result = Stl.decompose(series, [7, 365])
+
+        # Access seasonal components
+        weekly_seasonal = Enum.at(result.seasonal, 0)
+        yearly_seasonal = Enum.at(result.seasonal, 1)
+
+        # With additional MSTL options
+        result = Stl.decompose(series, [7, 365],
+          iterations: 2,
+          lambda: 0.5,
+          seasonal_lengths: [11, 731]
+        )
   """
-  @spec decompose([number()] | map(), Stl.Params.t()) :: t()
-  def decompose(series, opts) do
-    period = Keyword.fetch!(opts, :period)
+  @spec decompose([number()] | map(), pos_integer() | [pos_integer()], Stl.Params.t()) :: t()
+  def decompose(series, period, opts \\ [])
 
-    if period < 2 do
-      raise ArgumentError, "period must be greater than 1"
-    end
+  def decompose(_series, period, _opts) when period < 2 do
+    raise ArgumentError, "period must be greater than 1"
+  end
 
+  def decompose(_series, [], _opts) do
+    raise ArgumentError, "periods must not be empty"
+  end
+
+  def decompose(series, period, opts) when is_integer(period) do
     series_values = extract_series_values(series)
     include_weights = Keyword.get(opts, :include_weights, false) || Keyword.get(opts, :robust, false)
     params = struct(Stl.Params, opts)
@@ -66,6 +104,19 @@ defmodule Stl do
     else: result
   end
 
+  def decompose(series, periods, opts) when is_list(periods) do
+    series_values = extract_series_values(series)
+    params = struct(Stl.Params, opts)
+
+    {seasonal, trend, remainder, _} = Stl.NIF.decompose_multi(series_values, periods, params)
+
+    %{
+      seasonal: seasonal,
+      trend: trend,
+      remainder: remainder
+    }
+  end
+
   @doc """
   Calculate the seasonal strength from a decomposition result.
 
@@ -76,7 +127,7 @@ defmodule Stl do
   - 1.0 means maximum strength
 
   ## Examples
-      iex> result = Stl.decompose([5.0, 9.0, 2.0, 9.0, 0.0, 6.0, 3.0], period: 2)
+      iex> result = Stl.decompose([5.0, 9.0, 2.0, 9.0, 0.0, 6.0, 3.0], 2)
       iex> Stl.seasonal_strength(result)
       0.9422302715663797
   """
@@ -92,7 +143,7 @@ defmodule Stl do
 
   ## Examples
 
-      iex> result = Stl.decompose([5.0, 9.0, 2.0, 9.0, 0.0, 6.0, 3.0], period: 2)
+      iex> result = Stl.decompose([5.0, 9.0, 2.0, 9.0, 0.0, 6.0, 3.0], 2)
       iex> Stl.trend_strength(result)
       0.727898191447705
   """

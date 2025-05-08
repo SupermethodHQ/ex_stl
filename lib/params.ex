@@ -13,7 +13,10 @@ defmodule Stl.Params do
     low_pass_jump: pos_integer() | nil,
     inner_loops: non_neg_integer() | nil,
     outer_loops: non_neg_integer() | nil,
-    robust: boolean() | nil
+    robust: boolean() | nil,
+    iterations: pos_integer() | nil,
+    lambda: float() | nil,
+    seasonal_lengths: [pos_integer()] | nil
   ]
 
   defstruct [
@@ -28,6 +31,9 @@ defmodule Stl.Params do
     :low_pass_jump,
     :inner_loops,
     :outer_loops,
-    :robust
+    :robust,
+    :iterations,
+    :lambda,
+    :seasonal_lengths
   ]
 end
