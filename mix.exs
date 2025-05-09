@@ -7,7 +7,7 @@ defmodule Stl.MixProject do
 
   def project do
     [
-      app: :stl,
+      app: :ex_stl,
       version: @version,
       elixir: "~> 1.16",
       compilers: [:elixir_make] ++ Mix.compilers(),
@@ -36,7 +36,7 @@ defmodule Stl.MixProject do
 
   defp docs do
     [
-      main: "STL",
+      main: "ex_stl",
       source_url: @github_url,
       source_ref: "v#{@version}"
     ]
