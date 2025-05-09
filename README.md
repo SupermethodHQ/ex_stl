@@ -12,11 +12,11 @@ STL (Seasonal and Trend decomposition using Loess) is a versatile and robust met
 
 STL has several advantages over other decomposition methods:
 
-Handles any type of seasonality (not just monthly or quarterly)
-Allows the seasonal component to change over time
-Supports robust decomposition that's resistant to outliers
-Can handle missing values
-Works efficiently with large datasets
+- Handles any type of seasonality (not just monthly or quarterly)
+- Allows the seasonal component to change over time
+- Supports robust decomposition that's resistant to outliers
+- Can handle missing values
+- Works efficiently with large datasets
 
 ## Use Cases
 

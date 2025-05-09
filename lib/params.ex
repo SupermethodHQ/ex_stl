@@ -1,6 +1,4 @@
 defmodule Stl.Params do
-  @moduledoc false
-
   @type t :: [
     seasonal_length: pos_integer() | nil,
     trend_length: pos_integer() | nil,

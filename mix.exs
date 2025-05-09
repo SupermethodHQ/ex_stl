@@ -36,7 +36,7 @@ defmodule Stl.MixProject do
 
   defp docs do
     [
-      main: "ex_stl",
+      main: "Stl",
       source_url: @github_url,
       source_ref: "v#{@version}"
     ]

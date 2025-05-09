@@ -1,6 +1,39 @@
 defmodule Stl do
-  @moduledoc """
-  Seasonal-trend decomposition for Elixir using STL.cpp
+  @moduledoc ~S"""
+    A fast and reliable Elixir library for decomposing time series data using STL (Seasonal and Trend decomposition using Loess). This package provides Elixir bindings to the STL C++ library `https://github.com/ankane/stl-cpp` using Fine to handle implementing the NIF.
+
+    It supports both Seasonal-trend and Multi Seasonal-trend decomposition using `decompose/2` and `decompose/3` respectively, with the ability to smooth outliers with `robust` decomposition. See the docs for `decompose/2` and `decompose/3` for more details.
+
+    For a single seasonal trend, you can pass a list of values or a Date keyed map as the series.
+
+    ```
+    # Decompose a simple list with a weekly seasonal pattern
+    series = [5.0, 9.0, 2.0, 9.0, 0.0, 6.0, 3.0, 8.0, 5.0, 8.0,
+              7.0, 8.0, 8.0, 0.0, 2.0, 5.0, 0.0, 5.0, 6.0, 7.0,
+              3.0, 6.0, 1.0, 4.0, 4.0, 4.0, 3.0, 7.0, 5.0, 8.0]
+
+    result = Stl.decompose(series, 7)
+
+    # Access the components
+    seasonal = result.seasonal
+    trend = result.trend
+    remainder = result.remainder
+
+    # Calculate strength measures
+    seasonal_strength = Stl.seasonal_strength(result)
+    trend_strength = Stl.trend_strength(result)
+
+    IO.puts("Seasonal strength: #{seasonal_strength}")
+    # Seasonal strength: 0.28411169658385693
+    IO.puts("Trend strength: #{trend_strength}")
+    # Trend strength: 0.16384239106781462
+    ```
+
+    For multi seasonal trends, the second param should be an integer list of periods.
+
+    ```
+    Stl.decompose(series, [7, 30])
+    ```
   """
 
   @typedoc "Result of STL decomposition."
