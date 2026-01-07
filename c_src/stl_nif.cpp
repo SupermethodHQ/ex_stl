@@ -166,6 +166,9 @@ std::tuple<std::vector<float>, std::vector<float>, std::vector<float>, std::vect
     throw std::invalid_argument("period must be greater than 1");
   }
 
+  if (static_cast<size_t>(series.size()) < static_cast<size_t>(period * 2)) {
+    throw std::invalid_argument("series has less than two periods");
+  }
   auto params = convert_params(ex_params);
   auto result = params.fit(series, period);
 
