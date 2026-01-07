@@ -8,9 +8,7 @@ defmodule Stl do
 
     ```
     # Decompose a simple list with a weekly seasonal pattern
-    series = [5.0, 9.0, 2.0, 9.0, 0.0, 6.0, 3.0, 8.0, 5.0, 8.0,
-              7.0, 8.0, 8.0, 0.0, 2.0, 5.0, 0.0, 5.0, 6.0, 7.0,
-              3.0, 6.0, 1.0, 4.0, 4.0, 4.0, 3.0, 7.0, 5.0, 8.0]
+    series = [5.0, 9.0, 2.0, 9.0, 0.0, 6.0, 3.0, 8.0, 5.0, 8.0, 7.0, 8.0, 8.0, 0.0, 2.0, 5.0, 0.0, 5.0, 6.0, 7.0, 3.0, 6.0, 1.0, 4.0, 4.0, 4.0, 3.0, 7.0, 5.0, 8.0]
 
     result = Stl.decompose(series, 7)
 
@@ -30,9 +28,11 @@ defmodule Stl do
     ```
 
     For multi seasonal trends, the second param should be an integer list of periods.
+    The series must contain at least two full cycles of the largest period.
 
     ```
-    Stl.decompose(series, [7, 30])
+    # With 30 data points, we can use periods up to 15 (need 2x periods of data)
+    Stl.decompose(series, [7, 14])
     ```
   """
 
@@ -55,57 +55,142 @@ defmodule Stl do
   @doc """
   Decompose a time series using STL (Seasonal and Trend decomposition using Loess).
 
+  STL separates a time series into three components:
+  - **Seasonal**: The repeating pattern at the given period
+  - **Trend**: The underlying long-term direction
+  - **Remainder**: What's left after removing seasonal and trend (noise/anomalies)
+
   ## Parameters
-  * `series` - A list of numbers or a map with keys (e.g., dates) and values.
-  * `:period` - REQUIRED: The period of the seasonal component (must be >= 2).
-  * `opts` - Options for the decomposition:
-    * `:seasonal_length` - Length of the seasonal smoother.
-    * `:trend_length` - Length of the trend smoother.
-    * `:low_pass_length` - Length of the low-pass filter.
-    * `:seasonal_degree` - Degree of locally-fitted polynomial in seasonal smoothing (0 or 1).
-    * `:trend_degree` - Degree of locally-fitted polynomial in trend smoothing (0 or 1).
-    * `:low_pass_degree` - Degree of locally-fitted polynomial in low-pass smoothing (0 or 1).
-    * `:seasonal_jump` - Skipping value for seasonal smoothing.
-    * `:trend_jump` - Skipping value for trend smoothing.
-    * `:low_pass_jump` - Skipping value for low-pass smoothing.
-    * `:inner_loops` - Number of loops for updating the seasonal and trend components.
-    * `:outer_loops` - Number of iterations of robust fitting.
-    * `:robust` - If robustness iterations are to be used (boolean).
-    * `:include_weights` - Whether to include robustness weights in the result (boolean).
-    * For MSTL (when period is a list):
-    * `:iterations` - Number of iterations for MSTL.
-    * `:lambda` - Lambda for Box-Cox transformation (between 0 and 1).
-    * `:seasonal_lengths` - Lengths of the seasonal smoothers.
 
-    ## Examples
+  * `series` - A list of numbers, or a map with date/time keys and numeric values.
+  * `period` - The seasonal period as an integer (must be >= 2), or a list of integers for MSTL.
+  * `opts` - Optional keyword list (see Options below).
 
-    ### Standard STL decomposition (single period):
-        # Decompose with weekly seasonality
-        result = Stl.decompose(series, 7)
+  ## STL Options
 
-        # Access components
-        seasonal = result.seasonal
-        trend = result.trend
-        remainder = result.remainder
+  * `:seasonal_length` - Length of the seasonal smoother (default: 7).
+  * `:trend_length` - Length of the trend smoother.
+  * `:low_pass_length` - Length of the low-pass filter.
+  * `:seasonal_degree` - Degree of locally-fitted polynomial in seasonal smoothing (0 or 1).
+  * `:trend_degree` - Degree of locally-fitted polynomial in trend smoothing (0 or 1).
+  * `:low_pass_degree` - Degree of locally-fitted polynomial in low-pass smoothing (0 or 1).
+  * `:seasonal_jump` - Skipping value for seasonal smoothing.
+  * `:trend_jump` - Skipping value for trend smoothing.
+  * `:low_pass_jump` - Skipping value for low-pass smoothing.
+  * `:inner_loops` - Number of loops for updating the seasonal and trend components.
+  * `:outer_loops` - Number of iterations of robust fitting.
+  * `:robust` - Enable robust fitting to reduce the impact of outliers (default: false).
+  * `:include_weights` - Include robustness weights in the result (default: false).
 
-        # With robustness
-        result = Stl.decompose(series, 7, robust: true)
-        weights = result.weights
+  ## MSTL Options
 
-    ### MSTL decomposition (multiple periods):
-        # Decompose with both weekly and yearly seasonality
-        result = Stl.decompose(series, [7, 365])
+  * `:iterations` - Number of iterations for MSTL.
+  * `:lambda` - Lambda for Box-Cox transformation (between 0 and 1). Requires all positive values.
+  * `:seasonal_lengths` - Lengths of the seasonal smoothers (one per period).
 
-        # Access seasonal components
-        weekly_seasonal = Enum.at(result.seasonal, 0)
-        yearly_seasonal = Enum.at(result.seasonal, 1)
+  ## Return Value
 
-        # With additional MSTL options
-        result = Stl.decompose(series, [7, 365],
-          iterations: 2,
-          lambda: 0.5,
-          seasonal_lengths: [11, 731]
-        )
+  Returns a map with:
+  - `:seasonal` - List of seasonal component values (or list of lists for MSTL)
+  - `:trend` - List of trend component values
+  - `:remainder` - List of remainder values
+  - `:weights` - List of robustness weights (only when `robust: true` or `include_weights: true`)
+
+  ## Examples
+
+  ### Basic decomposition with a list
+
+  Pass a list of numeric values and specify the seasonal period:
+
+      iex> series = [5.0, 9.0, 2.0, 9.0, 0.0, 6.0, 3.0, 8.0, 5.0, 8.0,
+      ...>           7.0, 8.0, 8.0, 0.0, 2.0, 5.0, 0.0, 5.0, 6.0, 7.0,
+      ...>           3.0, 6.0, 1.0, 4.0, 4.0, 4.0, 3.0, 7.0, 5.0, 8.0]
+      iex> result = Stl.decompose(series, 7)
+      iex> length(result.seasonal)
+      30
+      iex> length(result.trend)
+      30
+      iex> length(result.remainder)
+      30
+
+  The components sum back to the original series:
+
+      iex> series = [5.0, 9.0, 2.0, 9.0, 0.0, 6.0, 3.0]
+      iex> result = Stl.decompose(series, 2)
+      iex> reconstructed = Enum.zip([result.seasonal, result.trend, result.remainder])
+      ...> |> Enum.map(fn {s, t, r} -> s + t + r end)
+      iex> Enum.zip(series, reconstructed) |> Enum.all?(fn {a, b} -> abs(a - b) < 0.0001 end)
+      true
+
+  ### Decomposition with a date-keyed map
+
+  Maps are automatically sorted chronologically before decomposition:
+
+      iex> today = ~D[2024-01-01]
+      iex> series = %{
+      ...>   Date.add(today, 0) => 5.0,
+      ...>   Date.add(today, 1) => 9.0,
+      ...>   Date.add(today, 2) => 2.0,
+      ...>   Date.add(today, 3) => 9.0,
+      ...>   Date.add(today, 4) => 0.0,
+      ...>   Date.add(today, 5) => 6.0,
+      ...>   Date.add(today, 6) => 3.0
+      ...> }
+      iex> result = Stl.decompose(series, 2)
+      iex> length(result.seasonal)
+      7
+
+  ### Robust decomposition (handling outliers)
+
+  Use `robust: true` to reduce the impact of outliers. This also returns weights indicating how much each point was downweighted (lower = more anomalous):
+
+      iex> series = [5.0, 9.0, 2.0, 9.0, 100.0, 6.0, 3.0, 8.0, 5.0, 8.0]
+      iex> result = Stl.decompose(series, 2, robust: true)
+      iex> Map.has_key?(result, :weights)
+      true
+      iex> length(result.weights)
+      10
+
+  ### Multi-seasonal decomposition (MSTL)
+
+  For data with multiple seasonal patterns, pass a list of periods. The result
+  contains a list of seasonal components, one per period. The series must have
+  at least two full cycles of the largest period.
+
+  ```elixir
+  # Generate sample data with two seasonal patterns (period 3 and period 7)
+  series = for i <- 0..99 do
+    3.0 * :math.sin(2 * :math.pi * i / 3) +    # period-3 pattern
+    2.0 * :math.sin(2 * :math.pi * i / 7) +    # period-7 pattern
+    0.1 * i +                                   # slight trend
+    :rand.uniform()                             # noise
+  end
+
+  result = Stl.decompose(series, [3, 7])
+
+  # Access individual seasonal components
+  [seasonal_3, seasonal_7] = result.seasonal
+  trend = result.trend
+  remainder = result.remainder
+  ```
+
+  MSTL with additional options:
+
+  ```elixir
+  result = Stl.decompose(series, [3, 7],
+    iterations: 3,
+    seasonal_lengths: [5, 9]
+  )
+  ```
+
+  Box-Cox transformation for variance stabilization (requires all positive values):
+
+  ```elixir
+  # Ensure all values are positive for Box-Cox
+  positive_series = Enum.map(series, &(&1 + 10.0))
+
+  result = Stl.decompose(positive_series, [3, 7], lambda: 0.5)
+  ```
   """
   @spec decompose([number()] | map(), pos_integer() | [pos_integer()], Stl.Params.t()) :: t()
   def decompose(series, period, opts \\ [])
@@ -167,16 +252,51 @@ defmodule Stl do
   @doc """
   Calculate the seasonal strength from a decomposition result.
 
-  Returns a float value between 0 and 1 representing the seasonal strength to signify a detected seasonal trend.
+  Seasonal strength measures how much of the variation in the data is explained by the seasonal component versus random noise. It's calculated as:
 
-  Values range from 0.0 to 1.0, where:
-  - 0.0 means no strength
-  - 1.0 means maximum strength
+      Fs = max(0, 1 - Var(remainder) / Var(seasonal + remainder))
+
+  ## Return Value
+
+  A float between 0.0 and 1.0:
+  - **0.0**: No seasonality detected (variation is all noise)
+  - **1.0**: Perfect seasonality (no noise)
+  - **> 0.6**: Generally indicates meaningful seasonal pattern
+
+  ## Parameters
+
+  * `result` - A decomposition result map containing `:seasonal` and `:remainder` keys.
 
   ## Examples
+
+  Strong seasonality (alternating high/low pattern):
+
       iex> result = Stl.decompose([5.0, 9.0, 2.0, 9.0, 0.0, 6.0, 3.0], 2)
       iex> Stl.seasonal_strength(result)
       0.9422302715663797
+
+  Comparing different seasonal periods to find the best fit:
+
+      iex> data = [5.0, 9.0, 2.0, 9.0, 0.0, 6.0, 3.0, 8.0, 5.0, 8.0, 7.0, 8.0]
+      iex> result_2 = Stl.decompose(data, 2)
+      iex> result_3 = Stl.decompose(data, 3)
+      iex> Stl.seasonal_strength(result_2) > Stl.seasonal_strength(result_3)
+      true
+
+  ### Practical usage: detecting if decomposition is meaningful
+
+  ```elixir
+  result = Stl.decompose(sales_data, 7)
+  seasonal_strength = Stl.seasonal_strength(result)
+
+  if seasonal_strength > 0.6 do
+    IO.puts("Strong weekly pattern detected!")
+    # Use seasonal component for forecasting
+  else
+    IO.puts("Weak or no weekly pattern")
+    # Consider different period or non-seasonal model
+  end
+  ```
   """
   @spec seasonal_strength(t()) :: float()
   def seasonal_strength(%{seasonal: s, remainder: r}), do: Stl.NIF.seasonal_strength(s, r)
@@ -184,15 +304,71 @@ defmodule Stl do
   @doc """
   Calculate the trend strength from a decomposition result.
 
-  Expects a decomposition map containing `:trend` and `:remainder` components.
+  Trend strength measures how much of the variation in the data is explained by the trend component versus random noise. It's calculated as:
 
-  Returns a float value between 0 and 1 representing the trend strength.
+      Ft = max(0, 1 - Var(remainder) / Var(trend + remainder))
+
+  ## Return Value
+
+  A float between 0.0 and 1.0:
+  - **0.0**: No trend detected (variation is all noise)
+  - **1.0**: Perfect trend (no noise)
+  - **> 0.6**: Generally indicates meaningful trend
+
+  ## Parameters
+
+  * `result` - A decomposition result map containing `:trend` and `:remainder` keys.
 
   ## Examples
+
+  Strong trend:
 
       iex> result = Stl.decompose([5.0, 9.0, 2.0, 9.0, 0.0, 6.0, 3.0], 2)
       iex> Stl.trend_strength(result)
       0.727898191447705
+
+  Detecting an upward trend in data:
+
+      iex> upward = [1.0, 2.1, 2.9, 4.2, 4.8, 6.1, 7.0, 7.9, 9.2, 10.0]
+      iex> result = Stl.decompose(upward, 2)
+      iex> strength = Stl.trend_strength(result)
+      iex> strength > 0.9
+      true
+
+  ### Practical usage: combining trend and seasonal strength
+
+  ```elixir
+  result = Stl.decompose(sales_data, 7)
+
+  seasonal = Stl.seasonal_strength(result)
+  trend = Stl.trend_strength(result)
+
+  cond do
+    trend > 0.8 and seasonal > 0.6 ->
+      IO.puts("Strong upward/downward trend with weekly pattern")
+
+    trend > 0.8 ->
+      IO.puts("Strong trend, weak seasonality - focus on trend for forecasting")
+
+    seasonal > 0.6 ->
+      IO.puts("Strong weekly pattern, weak trend - stable seasonal business")
+
+    true ->
+      IO.puts("Weak patterns - data may be mostly noise")
+  end
+  ```
+
+  ### Visualizing the decomposition
+
+  ```elixir
+  result = Stl.decompose(data, 7)
+
+  IO.puts("Seasonal strength: \#{Stl.seasonal_strength(result) |> Float.round(2)}")
+  IO.puts("Trend strength: \#{Stl.trend_strength(result) |> Float.round(2)}")
+
+  # Plot or export components
+  %{seasonal: seasonal, trend: trend, remainder: remainder} = result
+  ```
   """
   @spec trend_strength(t()) :: float()
   def trend_strength(%{trend: t, remainder: r}), do: Stl.NIF.trend_strength(t, r)
