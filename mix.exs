@@ -1,7 +1,7 @@
 defmodule Stl.MixProject do
   use Mix.Project
 
-  @version "0.1.0"
+  @version "0.2.0"
   @description "Seasonal-trend decomposition for Elixir using STL"
   @github_url "https://github.com/supermethodhq/ex_stl"
 
