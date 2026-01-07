@@ -280,6 +280,18 @@ defmodule StlTest do
       assert_elements_in_delta(result1.remainder, result2.remainder, 0.5)
     end
 
+    test "mstl supports series length equal to two max periods" do
+      series = Enum.map(0..19, &(&1 * 1.0))
+      periods = [5, 10]
+
+      result = Stl.decompose(series, periods)
+
+      assert length(result.trend) == 20
+      assert length(result.remainder) == 20
+      assert length(Enum.at(result.seasonal, 0)) == 20
+      assert length(Enum.at(result.seasonal, 1)) == 20
+    end
+
     test "mstl error handling - empty periods list" do
       assert_raise ArgumentError, "periods must not be empty", fn ->
         Stl.decompose(@series, [])
