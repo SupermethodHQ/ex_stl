@@ -125,11 +125,7 @@ defmodule Stl do
 
     {seasonal, trend, remainder, weights} = Stl.NIF.decompose(series_values, period, params, include_weights)
 
-    result = %{
-      seasonal: seasonal,
-      trend: trend,
-      remainder: remainder
-    }
+    result = %{seasonal: seasonal, trend: trend, remainder: remainder}
 
     # Add weights if requested or if robust is true
     if include_weights && weights != [],
@@ -149,6 +145,24 @@ defmodule Stl do
       remainder: remainder
     }
   end
+
+  defp extract_series_values(series) when is_list(series), do: series
+
+  defp extract_series_values(series) when is_map(series) do
+    series
+    |> Enum.sort(&sort_series/2)
+    |> Enum.map(fn {_, v} -> v end)
+  end
+
+  defp sort_series({%Date{} = left, _}, {%Date{} = right, _}), do: Date.compare(left, right) != :gt
+  defp sort_series({%NaiveDateTime{} = left, _}, {%NaiveDateTime{} = right, _}), do: NaiveDateTime.compare(left, right) != :gt
+  defp sort_series({%DateTime{} = left, _}, {%DateTime{} = right, _}), do: DateTime.compare(left, right) != :gt
+  defp sort_series({left, _}, {right, _}), do: to_unix(left) <= to_unix(right)
+
+  defp to_unix(%Date{} = d), do: d |> DateTime.new!(~T[00:00:00], "Etc/UTC") |> DateTime.to_unix()
+  defp to_unix(%NaiveDateTime{} = dt), do: dt |> DateTime.from_naive!("Etc/UTC") |> DateTime.to_unix()
+  defp to_unix(%DateTime{} = dt), do: DateTime.to_unix(dt)
+  defp to_unix(x), do: x
 
   @doc """
   Calculate the seasonal strength from a decomposition result.
@@ -183,33 +197,4 @@ defmodule Stl do
   @spec trend_strength(t()) :: float()
   def trend_strength(%{trend: t, remainder: r}), do: Stl.NIF.trend_strength(t, r)
 
-  defp extract_series_values(series) when is_list(series), do: series
-
-  defp extract_series_values(series) when is_map(series) do
-    series
-    |> Map.to_list()
-    |> sort_series_pairs()
-    |> Enum.map(fn {_, v} -> v end)
-  end
-
-  defp sort_series_pairs([]), do: []
-
-  defp sort_series_pairs([{first_key, _} | _] = pairs) do
-    sorter =
-      cond do
-        match?(%Date{}, first_key) ->
-          fn {left, _}, {right, _} -> Date.compare(left, right) != :gt end
-
-        match?(%NaiveDateTime{}, first_key) ->
-          fn {left, _}, {right, _} -> NaiveDateTime.compare(left, right) != :gt end
-
-        match?(%DateTime{}, first_key) ->
-          fn {left, _}, {right, _} -> DateTime.compare(left, right) != :gt end
-
-        true ->
-          fn {left, _}, {right, _} -> left <= right end
-      end
-
-    Enum.sort(pairs, sorter)
-  end
 end
