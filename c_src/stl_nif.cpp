@@ -15,8 +15,8 @@ namespace fine {
     static float decode(ErlNifEnv *env, const ERL_NIF_TERM &term) {
       double value;
       if (!enif_get_double(env, term, &value)) {
-        long int_value;
-        if (enif_get_long(env, term, &int_value)) {
+        ErlNifSInt64 int_value;
+        if (enif_get_int64(env, term, &int_value)) {
           value = static_cast<double>(int_value);
         } else {
           throw std::invalid_argument("Expected a number");
@@ -110,8 +110,8 @@ std::vector<float> to_vector_float(ErlNifEnv* env, const ERL_NIF_TERM& term) {
   while (enif_get_list_cell(env, list, &head, &tail)) {
     double value;
     if (!enif_get_double(env, head, &value)) {
-      int int_value;
-      if (enif_get_int(env, head, &int_value)) {
+      ErlNifSInt64 int_value;
+      if (enif_get_int64(env, head, &int_value)) {
         value = static_cast<double>(int_value);
       } else {
         throw std::invalid_argument("List elements must be numbers");
