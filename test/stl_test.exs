@@ -214,6 +214,30 @@ defmodule StlTest do
       assert length(Enum.at(result.seasonal, 1)) == length(series)
     end
 
+    test "mstl error handling - seasonal_lengths less than 2" do
+      long_series = Enum.take(@series, 24)
+
+      assert_raise ArgumentError, "periods must be at least 2", fn ->
+        Stl.decompose(long_series, [6, 10], seasonal_lengths: [1, 5])
+      end
+    end
+
+    test "mstl error handling - seasonal_lengths length mismatch" do
+      long_series = Enum.take(@series, 24)
+
+      assert_raise ArgumentError, "seasonal_lengths must have the same length as periods", fn ->
+        Stl.decompose(long_series, [6, 10], seasonal_lengths: [9])
+      end
+    end
+
+    test "mstl error handling - seasonal_lengths require more samples" do
+      long_series = Enum.take(@series, 24)
+
+      assert_raise ArgumentError, "series has less than two periods", fn ->
+        Stl.decompose(long_series, [6, 10], seasonal_lengths: [13, 5])
+      end
+    end
+
     test "mstl with multiple STL parameters" do
       # Test with a mix of regular STL and MSTL parameters
       series = Enum.map(0..(2 * 19 - 1), &(&1 * 1.0))
