@@ -231,6 +231,14 @@ std::tuple<std::vector<std::vector<float>>, std::vector<float>, std::vector<floa
     std::vector<size_t> seasonal_lengths;
     seasonal_lengths.reserve(ex_params.seasonal_lengths->size());
     for (auto length : *ex_params.seasonal_lengths) {
+      if (length < 2) {
+        throw std::invalid_argument("periods must be at least 2");
+      }
+
+      if (static_cast<size_t>(series.size()) < static_cast<size_t>(length * 2)) {
+        throw std::invalid_argument("series has less than two periods");
+      }
+
       seasonal_lengths.push_back(static_cast<size_t>(length));
     }
     mstl_params = mstl_params.seasonal_lengths(seasonal_lengths);

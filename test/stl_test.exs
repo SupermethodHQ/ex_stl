@@ -206,16 +206,18 @@ defmodule StlTest do
 
     test "mstl with seasonal_lengths parameter" do
       # Test with custom seasonal lengths
-      result = Stl.decompose(@series, [6, 10], seasonal_lengths: [9, 19])
+      series = Enum.map(0..(2 * 19 - 1), &(&1 * 1.0))
+      result = Stl.decompose(series, [6, 10], seasonal_lengths: [9, 19])
 
       # Results should be valid (we can't easily predict exact values)
-      assert length(Enum.at(result.seasonal, 0)) == length(@series)
-      assert length(Enum.at(result.seasonal, 1)) == length(@series)
+      assert length(Enum.at(result.seasonal, 0)) == length(series)
+      assert length(Enum.at(result.seasonal, 1)) == length(series)
     end
 
     test "mstl with multiple STL parameters" do
       # Test with a mix of regular STL and MSTL parameters
-      result = Stl.decompose(@series, [6, 10],
+      series = Enum.map(0..(2 * 19 - 1), &(&1 * 1.0))
+      result = Stl.decompose(series, [6, 10],
         iterations: 3,
         lambda: 0.5,
         seasonal_lengths: [9, 19],
@@ -224,11 +226,10 @@ defmodule StlTest do
         robust: true
       )
 
-      # Results should be valid
-      assert length(Enum.at(result.seasonal, 0)) == length(@series)
-      assert length(Enum.at(result.seasonal, 1)) == length(@series)
-      assert length(result.trend) == length(@series)
-      assert length(result.remainder) == length(@series)
+      assert length(Enum.at(result.seasonal, 0)) == length(series)
+      assert length(Enum.at(result.seasonal, 1)) == length(series)
+      assert length(result.trend) == length(series)
+      assert length(result.remainder) == length(series)
     end
 
     test "mstl with periods in different order" do
@@ -274,6 +275,12 @@ defmodule StlTest do
       assert_raise ArgumentError, "series has less than two periods", fn ->
         # Try with a period of 6, which requires at least 12 points
         Stl.decompose(short_series, [6])
+      end
+    end
+
+    test "mstl error handling - seasonal lengths require two periods" do
+      assert_raise ArgumentError, "series has less than two periods", fn ->
+        Stl.decompose(@series, [6, 10], seasonal_lengths: [9, 19])
       end
     end
   end
