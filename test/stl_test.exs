@@ -8,6 +8,10 @@ defmodule StlTest do
     3.0, 6.0, 1.0, 4.0, 4.0, 4.0, 3.0, 7.0, 5.0, 8.0
   ]
 
+  @expected_seasonal [0.3692665100097656, 0.7565547227859497, -1.3324145078659058, 1.9553654193878174, -0.6044800877571106]
+  @expected_trend [4.804096698760986, 4.909707069396973, 5.015316963195801, 5.160449981689453, 5.305583477020264]
+  @expected_remainder [-0.17336320877075195, 3.333738327026367, -1.6829023361206055, 1.8841848373413086, -4.701103210449219]
+
   test "decomposes a map with dates" do
     today = Date.utc_today()
     result =
@@ -18,25 +22,17 @@ defmodule StlTest do
           end)
       |> Stl.decompose(7)
 
-    seasonal = [0.10646757483482361, 0.704910397529602, -1.1810311079025269, 0.9291385412216187, -0.43146127462387085]
-    trend = [3.912654161453247, 4.210334300994873, 4.50801420211792, 4.752384662628174, 4.996755123138428]
-    remainder = [-0.019121646881103516, -0.9152445793151855, 0.6730170249938965, -2.681523323059082, 2.434706211090088]
-
-    assert_elements_in_delta(seasonal, Enum.take(result.seasonal, 5))
-    assert_elements_in_delta(trend, Enum.take(result.trend, 5))
-    assert_elements_in_delta(remainder, Enum.take(result.remainder, 5))
+    assert_elements_in_delta(@expected_seasonal, Enum.take(result.seasonal, 5))
+    assert_elements_in_delta(@expected_trend, Enum.take(result.trend, 5))
+    assert_elements_in_delta(@expected_remainder, Enum.take(result.remainder, 5))
   end
 
   test "decomposes a list" do
     result = Stl.decompose(@series, 7)
 
-    seasonal = [0.3692665100097656, 0.7565547227859497, -1.3324145078659058, 1.9553654193878174, -0.6044800877571106]
-    trend = [4.804096698760986, 4.909707069396973, 5.015316963195801, 5.160449981689453, 5.305583477020264]
-    remainder = [-0.17336320877075195, 3.333738327026367, -1.6829023361206055, 1.8841848373413086, -4.701103210449219]
-
-    assert_elements_in_delta(seasonal, Enum.take(result.seasonal, 5))
-    assert_elements_in_delta(trend, Enum.take(result.trend, 5))
-    assert_elements_in_delta(remainder, Enum.take(result.remainder, 5))
+    assert_elements_in_delta(@expected_seasonal, Enum.take(result.seasonal, 5))
+    assert_elements_in_delta(@expected_trend, Enum.take(result.trend, 5))
+    assert_elements_in_delta(@expected_remainder, Enum.take(result.remainder, 5))
   end
 
   test "works with robustness" do
