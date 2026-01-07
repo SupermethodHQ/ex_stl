@@ -187,7 +187,29 @@ defmodule Stl do
 
   defp extract_series_values(series) when is_map(series) do
     series
-    |> Enum.sort_by(fn {k, _} -> k end)
+    |> Map.to_list()
+    |> sort_series_pairs()
     |> Enum.map(fn {_, v} -> v end)
+  end
+
+  defp sort_series_pairs([]), do: []
+
+  defp sort_series_pairs([{first_key, _} | _] = pairs) do
+    sorter =
+      cond do
+        match?(%Date{}, first_key) ->
+          fn {left, _}, {right, _} -> Date.compare(left, right) != :gt end
+
+        match?(%NaiveDateTime{}, first_key) ->
+          fn {left, _}, {right, _} -> NaiveDateTime.compare(left, right) != :gt end
+
+        match?(%DateTime{}, first_key) ->
+          fn {left, _}, {right, _} -> DateTime.compare(left, right) != :gt end
+
+        true ->
+          fn {left, _}, {right, _} -> left <= right end
+      end
+
+    Enum.sort(pairs, sorter)
   end
 end
